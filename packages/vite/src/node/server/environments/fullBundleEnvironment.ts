@@ -435,7 +435,7 @@ class Clients {
   private clientToId = new Map<NormalizedHotChannelClient, string>()
   private idToClient = new Map<string, NormalizedHotChannelClient>()
 
-  setupIfNeeded(client: NormalizedHotChannelClient, clientId: string): void {
+  setupIfNeeded(client: NormalizedHotChannelClient, clientId: string) {
     const id = this.clientToId.get(client)
     if (id && id !== clientId) {
       throw new Error(
