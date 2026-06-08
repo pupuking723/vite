@@ -142,6 +142,7 @@ export class FullBundleDevEnvironment extends DevEnvironment {
           }
           return
         }
+        this.lastBuildError = null
         const { updates, changedFiles } = result
         if (changedFiles.length === 0) {
           return
@@ -170,7 +171,6 @@ export class FullBundleDevEnvironment extends DevEnvironment {
           })
           return
         }
-        // Rebuild succeeded → bundle is fresh, no error condition remains.
         this.lastBuildError = null
 
         // NOTE: don't clear memoryFiles here as incremental build reuses the files
