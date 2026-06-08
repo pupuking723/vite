@@ -110,11 +110,12 @@ export class FullBundleDevEnvironment extends DevEnvironment {
     )!
 
     this.hot.on('vite:module-loaded', (payload, client) => {
-      const isNew = this.clients.setupIfNeeded(client, payload.clientId)
+      this.clients.setupIfNeeded(client, payload.clientId)
       this.devEngine.registerModules(payload.clientId, payload.modules)
-
-      // Replay the cached build error to fresh connections
-      if (isNew && this.lastBuildError) {
+    })
+    this.hot.on('vite:client:connect', (_payload, client) => {
+      // Replay the cached build error to freshly connected clients.
+      if (this.lastBuildError) {
         client.send({
           type: 'error',
           err: prepareError(this.lastBuildError),
@@ -131,6 +132,7 @@ export class FullBundleDevEnvironment extends DevEnvironment {
     this.devEngine = await dev(rollupOptions, outputOptions, {
       onHmrUpdates: (result) => {
         if (result instanceof Error) {
+          this.lastBuildError = result
           // TODO: send to the specific client
           for (const client of this.clients.getAll()) {
             client.send({
@@ -211,9 +213,11 @@ export class FullBundleDevEnvironment extends DevEnvironment {
 
   private async waitForInitialBuildFinish(): Promise<void> {
     await this.devEngine.ensureCurrentBuildFinish()
-    while (this.memoryFiles.size === 0) {
+    let state = await this.devEngine.getBundleState()
+    while (this.memoryFiles.size === 0 && !state.lastBuildErrored) {
       await setTimeout(10)
       await this.devEngine.ensureCurrentBuildFinish()
+      state = await this.devEngine.getBundleState()
     }
   }
 
@@ -431,20 +435,15 @@ class Clients {
   private clientToId = new Map<NormalizedHotChannelClient, string>()
   private idToClient = new Map<string, NormalizedHotChannelClient>()
 
-  /** Returns `true` if this is the first time this client/id has been
-   *  registered (caller uses this to e.g. replay cached errors on
-   *  first connect / after a browser refresh reconnect). */
-  setupIfNeeded(client: NormalizedHotChannelClient, clientId: string): boolean {
+  setupIfNeeded(client: NormalizedHotChannelClient, clientId: string): void {
     const id = this.clientToId.get(client)
     if (id && id !== clientId) {
       throw new Error(
         'client ID conflict detected. Please restart the dev server.',
       )
     }
-    const isNew = !this.idToClient.has(clientId)
     this.clientToId.set(client, clientId)
     this.idToClient.set(clientId, client)
-    return isNew
   }
 
   get(id: string): NormalizedHotChannelClient | undefined {
